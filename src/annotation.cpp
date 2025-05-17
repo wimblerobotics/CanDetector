@@ -18,33 +18,86 @@ void runAnnotationLoop(cv::VideoCapture& cap, const std::vector<ObjectDescriptor
 
         std::cout << "Processing frame " << frameNumber << "..." << std::endl;
 
-        // Object recognition based on descriptors
+        // Enhanced object recognition to merge regions based on primary and secondary colors
         boundingBoxes.clear();
         for (const auto& descriptor : descriptors) {
-            // Convert main color to HSV
-            cv::Mat mainColor(1, 1, CV_8UC3, cv::Scalar(descriptor.main_color_rgb[2], descriptor.main_color_rgb[1], descriptor.main_color_rgb[0]));
-            cv::Mat mainColorHSV;
-            cv::cvtColor(mainColor, mainColorHSV, cv::COLOR_BGR2HSV);
+            // Convert primary and secondary colors to HSV
+            cv::Mat primaryColor(1, 1, CV_8UC3, cv::Scalar(descriptor.main_color_rgb[2], descriptor.main_color_rgb[1], descriptor.main_color_rgb[0]));
+            cv::Mat secondaryColor(1, 1, CV_8UC3, cv::Scalar(descriptor.secondary_color_rgb[2], descriptor.secondary_color_rgb[1], descriptor.secondary_color_rgb[0]));
+            cv::Mat primaryColorHSV, secondaryColorHSV;
+            cv::cvtColor(primaryColor, primaryColorHSV, cv::COLOR_BGR2HSV);
+            cv::cvtColor(secondaryColor, secondaryColorHSV, cv::COLOR_BGR2HSV);
 
-            // Define HSV range for main color
-            cv::Scalar lowerBound(mainColorHSV.at<cv::Vec3b>(0, 0)[0] - 10, 100, 100);
-            cv::Scalar upperBound(mainColorHSV.at<cv::Vec3b>(0, 0)[0] + 10, 255, 255);
+            // Define HSV ranges for primary and secondary colors
+            cv::Scalar primaryLower(primaryColorHSV.at<cv::Vec3b>(0, 0)[0] - 10, 100, 100);
+            cv::Scalar primaryUpper(primaryColorHSV.at<cv::Vec3b>(0, 0)[0] + 10, 255, 255);
+            cv::Scalar secondaryLower(secondaryColorHSV.at<cv::Vec3b>(0, 0)[0] - 10, 50, 50);
+            cv::Scalar secondaryUpper(secondaryColorHSV.at<cv::Vec3b>(0, 0)[0] + 10, 255, 255);
 
             cv::Mat hsvFrame;
             cv::cvtColor(frame, hsvFrame, cv::COLOR_BGR2HSV);
 
-            // Threshold based on main color
-            cv::Mat mask;
-            cv::inRange(hsvFrame, lowerBound, upperBound, mask);
+            // Threshold based on primary and secondary colors
+            cv::Mat primaryMask, secondaryMask;
+            cv::inRange(hsvFrame, primaryLower, primaryUpper, primaryMask);
+            cv::inRange(hsvFrame, secondaryLower, secondaryUpper, secondaryMask);
 
-            // Find contours in the mask
-            std::vector<std::vector<cv::Point>> contours;
-            cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+            // Find contours for primary color
+            std::vector<std::vector<cv::Point>> primaryContours;
+            cv::findContours(primaryMask, primaryContours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-            for (const auto& contour : contours) {
+            // Merge neighboring regions of primary color
+            std::vector<cv::Rect> mergedRegions;
+            for (const auto& contour : primaryContours) {
                 cv::Rect boundingBox = cv::boundingRect(contour);
-                boundingBoxes.push_back(boundingBox);
+                bool merged = false;
+                for (auto& region : mergedRegions) {
+                    if ((cv::norm(region.tl() - boundingBox.tl()) < 50) || (cv::norm(region.br() - boundingBox.br()) < 50)) {
+                        region |= boundingBox; // Merge regions
+                        merged = true;
+                        break;
+                    }
+                }
+                if (!merged) {
+                    mergedRegions.push_back(boundingBox);
+                }
             }
+
+            // Validate merged regions
+            for (const auto& region : mergedRegions) {
+                cv::Mat testRegion = hsvFrame(region);
+                cv::Mat primaryRegion, secondaryRegion;
+                cv::inRange(testRegion, primaryLower, primaryUpper, primaryRegion);
+                cv::inRange(testRegion, secondaryLower, secondaryUpper, secondaryRegion);
+
+                double primaryArea = cv::countNonZero(primaryRegion);
+                double secondaryArea = cv::countNonZero(secondaryRegion);
+                double totalArea = region.area();
+
+                // Check color ratio and aspect ratio
+                if (primaryArea / totalArea >= descriptor.color_ratio - 0.1 &&
+                    primaryArea / totalArea <= descriptor.color_ratio + 0.1 &&
+                    secondaryArea / totalArea >= (1 - descriptor.color_ratio) - 0.1 &&
+                    secondaryArea / totalArea <= (1 - descriptor.color_ratio) + 0.1) {
+
+                    float aspectRatio = static_cast<float>(region.width) / region.height;
+                    if (aspectRatio >= 0.5 && aspectRatio <= 2.0) { // Example aspect ratio range
+                        boundingBoxes.push_back(region);
+                    }
+                }
+            }
+
+            // Debugging: Visualize primary and secondary masks
+            cv::imshow("Primary Mask", primaryMask);
+            cv::imshow("Secondary Mask", secondaryMask);
+
+            // Debugging: Draw merged regions on the frame
+            for (const auto& region : mergedRegions) {
+                cv::rectangle(frame, region, cv::Scalar(255, 0, 0), 2); // Blue for merged regions
+            }
+
+            // Display the frame with merged regions
+            cv::imshow("Merged Regions", frame);
         }
 
         // Draw bounding boxes

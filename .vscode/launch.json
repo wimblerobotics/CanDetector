@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch CanDetector",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/CanDetector",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "executableName",
+      "description": "Enter the name of the executable (e.g., CanDetector)"
+    },
+    {
+      "type": "promptString",
+      "id": "videoSource",
+      "description": "Enter the video source (e.g., 0 for camera or path to video file)"
+    }
+  ]
+}

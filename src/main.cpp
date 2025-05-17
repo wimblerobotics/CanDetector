@@ -20,7 +20,11 @@ int main(int argc, char** argv) {
 
     cv::VideoCapture cap;
     if (videoSource == "0") {
-        cap.open(0);
+        cap.open("libcamerasrc ! video/x-raw,format=RGB,width=640,height=480 ! videoconvert ! appsink", cv::CAP_GSTREAMER);
+        if (!cap.isOpened()) {
+            std::cerr << "Error: Could not open camera using GStreamer pipeline with RGB format." << std::endl;
+            return 1;
+        }
     } else {
         cap.open(videoSource);
     }
@@ -29,11 +33,17 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    std::cout << "Starting CanDetector with video source: " << videoSource << std::endl;
+
     // Load object descriptors (to be implemented)
+    std::cout << "Loading object descriptors..." << std::endl;
     std::vector<ObjectDescriptor> descriptors = loadDescriptors("descriptors.json");
 
+    std::cout << "Starting annotation loop..." << std::endl;
     // Start annotation loop
     runAnnotationLoop(cap, descriptors);
+
+    std::cout << "Annotation loop finished." << std::endl;
 
     return 0;
 }

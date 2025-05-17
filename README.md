@@ -24,9 +24,9 @@ A C++/OpenCV tool for Raspberry Pi (Ubuntu 24.04) to assist in building annotate
 sudo apt update
 sudo apt install cmake g++ libopencv-dev
 cd CanDetector
-mkdir build && cd build
-cmake ..
-make
+mkdir build 
+cmake -S . -B build
+clear;cmake --build build;./build/CanDetector
 ```
 
 ### Usage
